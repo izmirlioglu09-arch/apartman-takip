@@ -155,7 +155,7 @@ c3.metric("⚖️ Net Kasa", f"{t_net:,.2f} TL")
 st.markdown("---")
 
 # =================================================================
-# 📋 BÖLÜM 4: CARİ EKSTRE SORGULAMA ALANI (PARANTEZ SORUNLARI GİDERİLDİ)
+# 📋 BÖLÜM 4: CARİ EKSTRE SORGULAMA ALANI
 # =================================================================
 st.markdown("### 🔍 4. Finansal Cari Ekstre Listesi")
 ex_col1, ex_col2 = st.columns(2)
@@ -167,7 +167,7 @@ with ex_col2:
 
 ekstre_listesi = []
 
-# Gelir Verilerini Çek ve Listeye Bağla
+# Gelir Verilerini Ekle
 df_gelirler_filtreli = df_aidat[df_aidat["Durum"].str.contains("Ödendi", na=False)].copy()
 if not df_gelirler_filtreli.empty:
     if secilen_cari != "Tümü (Tüm Bina / Gelir+Gider)":
@@ -182,12 +182,16 @@ if not df_gelirler_filtreli.empty:
             "Çıkan Bakiye (Gider)": 0.0
         })
 
-# Gider Verilerini Çek ve Havuza Bağla (Tüm Parantez Yapıları Eksiksiz Kapatıldı)
-if not df_masraf.empty:
-    if secilen_cari == "Tümü (Tüm Bina / Gelir+Gider)":
-        for idx_m, row in df_masraf.iterrows():
-            ekstre_listesi.append({
-                "Tarih": str(row["Tarih"]), 
-                "İşlem Türü": "Gider (Masraf)",
-                "Açıklama / Sakin": str(row["Açıklama"]), 
-                "Kategori / Dönem": str(row["Kategori"]),
+# Gider Verilerini Ekle
+if not df_masraf.empty and secilen_cari == "Tümü (Tüm Bina / Gelir+Gider)":
+    for idx_m, row in df_masraf.iterrows():
+        ekstre_listesi.append({
+            "Tarih": str(row["Tarih"]), 
+            "İşlem Türü": "Gider (Masraf)",
+            "Açıklama / Sakin": str(row["Açıklama"]), 
+            "Kategori / Dönem": str(row["Kategori"]),
+            "Giren Bakiye (Gelir)": 0.0, 
+            "Çıkan Bakiye (Gider)": float(row["Tutar (TL)"])
+        })
+
+if len(ekstre_listesi) > 0:
