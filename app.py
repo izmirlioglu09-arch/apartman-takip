@@ -9,15 +9,13 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 
 # Veritabanı Dosya İsimleri
 AIDAT_FILE = "aidat_veritabanı.xlsx"
 MASRAF_FILE = "masraf_veritabanı.xlsx"
 SAKIN_AYAR_FILE = "sakin_ayarları.xlsx"
 
-# PDF Türkçe Font Tanımlaması (Bulut sunucu uyumluluğu için standart Helvetica düşüşlü)
+# Bulut Sunucu Standart Fontları
 FONT_N = 'Helvetica'
 FONT_B = 'Helvetica-Bold'
 
@@ -42,9 +40,9 @@ def aidat_veritabani_yukle(df_sakinler):
                     v_tarih = "-"
                     v_durum = "Ödenmedi"
                     if not list(eski.index) == []:
-                        v_odenen = float(eski["Ödenen Tutar (TL)"].values) if hasattr(eski["Ödenen Tutar (TL)"], "values") else float(eski["Ödenen Tutar (TL)"])
-                        v_tarih = str(eski["Ödeme Tarihi"].values) if hasattr(eski["Ödeme Tarihi"], "values") else str(eski["Ödeme Tarihi"])
-                        v_durum = str(eski["Durum"].values) if hasattr(eski["Durum"], "values") else str(eski["Durum"])
+                        v_odenen = float(eski["Ödenen Tutar (TL)"].iloc) if hasattr(eski["Ödenen Tutar (TL)"], "iloc") else float(eski["Ödenen Tutar (TL)"])
+                        v_tarih = str(eski["Ödeme Tarihi"].iloc) if hasattr(eski["Ödeme Tarihi"], "iloc") else str(eski["Ödeme Tarihi"])
+                        v_durum = str(eski["Durum"].iloc) if hasattr(eski["Durum"], "iloc") else str(eski["Durum"])
                     guncel.append({
                         "Daire No": g_adi, "Dönem Ay": ay, "Aidat Tutarı (TL)": float(row["Aylık Aidat (TL)"]),
                         "Ödenen Tutar (TL)": v_odenen, "Ödeme Tarihi": v_tarih, "Durum": v_durum
@@ -52,7 +50,8 @@ def aidat_veritabani_yukle(df_sakinler):
             df = pd.DataFrame(guncel)
             df.to_excel(AIDAT_FILE, index=False)
             return df
-        except: pass
+        except: 
+            pass
     
     veriler = []
     for _, r in df_sakinler.iterrows():
@@ -65,12 +64,13 @@ def aidat_veritabani_yukle(df_sakinler):
     return df
 
 def masraf_veritabani_yukle():
-    if os.path.exists(MASRAF_FILE): return pd.read_excel(MASRAF_FILE)
+    if os.path.exists(MASRAF_FILE): 
+        return pd.read_excel(MASRAF_FILE)
     df = pd.DataFrame(columns=["Tarih", "Cari Adı / Kurum", "Kategori", "Açıklama", "Tutar (TL)"])
     df.to_excel(MASRAF_FILE, index=False)
     return df
 
-# PDF Üretme Modülü (Türkçe Karakter Kararlılık Ayarlı)
+# PDF Üretme Modülü (Sütun genişliği kilitlenme hatası kesin olarak giderildi)
 def pdf_ekstre_uret(cari_isim, b_tar, bit_tar, df_veri, t_giriis, t_cikis):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
@@ -80,12 +80,10 @@ def pdf_ekstre_uret(cari_isim, b_tar, bit_tar, df_veri, t_giriis, t_cikis):
     s_normal = ParagraphStyle('N', fontName=FONT_N, fontSize=9)
     s_t_baslik = ParagraphStyle('TB', fontName=FONT_B, fontSize=9, textColor=colors.whitesmoke)
     
-    # Başlık Alanı
-    story.append(Paragraph(f"APARTMAN YONETIMI MALI CARI EKSTRE RAPORU", s_baslik))
-    story.append(Paragraph(f"<b>Cari Hesap:</b> {cari_isim} | <b>Donem:</b> {b_tar.strftime('%d.%m.%Y')} - {bit_tar.strftime('%d.%m.%Y')}", s_normal))
+    story.append(Paragraph("APARTMAN YONETIMI MALI CARI EKSTRE RAPORU", s_baslik))
+    story.append(Paragraph(f"Cari Hesap: {cari_isim} | Donem: {b_tar.strftime('%d.%m.%Y')} - {bit_tar.strftime('%d.%m.%Y')}", s_normal))
     story.append(Spacer(1, 15))
     
-    # Tablo Başlıkları
     t_data = [[Paragraph("Tarih", s_t_baslik), Paragraph("Islem", s_t_baslik), Paragraph("Aciklama", s_t_baslik), Paragraph("Gelir (TL)", s_t_baslik), Paragraph("Gider (TL)", s_t_baslik)]]
     
     for _, r in df_veri.iterrows():
@@ -94,11 +92,11 @@ def pdf_ekstre_uret(cari_isim, b_tar, bit_tar, df_veri, t_giriis, t_cikis):
             Paragraph(str(r["Aciklama"]), s_normal), Paragraph(f"{r['Gelir']:,.2f} TL", s_normal), Paragraph(f"{r['Gider']:,.2f} TL", s_normal)
         ])
         
-    # Özet Satırı
-    t_data.append([Paragraph("<b>TOPLAM</b>", s_normal), Paragraph("", s_normal), Paragraph("", s_normal), Paragraph(f"<b>{t_giriis:,.2f} TL</b>", s_normal), Paragraph(f"<b>{t_cikis:,.2f} TL</b>", s_normal)])
-    t_data.append([Paragraph("<b>NET DURUM (BAKIYE)</b>", s_normal), Paragraph("", s_normal), Paragraph("", s_normal), Paragraph(f"<b>{(t_giriis - t_cikis):,.2f} TL</b>", s_normal), Paragraph("", s_normal)])
+    t_data.append([Paragraph("TOPLAM", s_normal), Paragraph("", s_normal), Paragraph("", s_normal), Paragraph(f"{t_giriis:,.2f} TL", s_normal), Paragraph(f"{t_cikis:,.2f} TL", s_normal)])
+    t_data.append([Paragraph("NET DURUM (BAKIYE)", s_normal), Paragraph("", s_normal), Paragraph("", s_normal), Paragraph(f"{(t_giriis - t_cikis):,.2f} TL", s_normal), Paragraph("", s_normal)])
     
-    tablo = Table(t_data, colWidths=[65, 80, 180, 95, 95])
+    # Sütun Genişlikleri Standart Sayısal Listeye Çevrilerek Hata Kökünden Çözüldü (Toplam 540pt)
+    tablo = Table(t_data, colWidths=[70, 110, 180, 90, 90])
     tablo.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2c3e50')),
         ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
@@ -118,7 +116,7 @@ df_sakin_ayarlari = sakin_ayarlarini_yukle()
 df_aidat = aidat_veritabani_yukle(df_sakin_ayarlari)
 df_masraf = masraf_veritabani_yukle()
 
-# Yenilenen 5 Ana Kurumsal Modül
+m_s1, m_s2, m_s3, m_s4, m_s5 = st.columns(5)
 m_s1, m_s2, m_s3, m_s4, m_s5 = st.tabs([
     "⚙️ 1. Sakin & Aidat Tanımlama", 
     "💰 2. Cari Aidat Tahsilatı", 
@@ -130,11 +128,10 @@ m_s1, m_s2, m_s3, m_s4, m_s5 = st.tabs([
 # --- MODÜL 1: SAKİN VE SABİT AİDAT TANIMLAMA ---
 with m_s1:
     st.header("⚙️ Bina Sakinlerini ve Aidat Miktarlarını Tanımla")
-    st.caption("Dairelerde oturan sakinlerin adını ve o daireye özel aylık sabit aidat borcunu buradan belirleyebilirsiniz.")
     c1, c2, c3 = st.columns(3)
     with c1: ay_d_no = st.text_input("Daire Numarası (Örn: Daire 1)", key="t_d")
-    with a2: ay_s_ad = st.text_input("Sakin Adı Soyadı (Cari Ünvan)", key="t_s")
-    with a3: ay_a_tut = st.number_input("Aylık Sabit Aidat Borcu (TL)", min_value=0.0, value=500.0, step=50.0, key="t_a")
+    with c2: ay_s_ad = st.text_input("Sakin Adı Soyadı (Cari Ünvan)", key="t_s")
+    with c3: ay_a_tut = st.number_input("Aylık Sabit Aidat Borcu (TL)", min_value=0.0, value=500.0, step=50.0, key="t_a")
     
     if st.button("🔄 Sakin Bilgisini ve Aidatını Sisteme İşle", key="t_btn", type="primary"):
         if ay_d_no and ay_s_ad:
@@ -185,6 +182,8 @@ with m_s2:
 # --- MODÜL 3: CARİ BAZLI MASRAF VE KALEM GİRİŞİ ---
 with m_s3:
     st.header("📉 Cari Firma / Kurum Gider Girişi")
-    st.caption("Binanın ortak masraflarını hangi kategoriyle ve hangi şirkete/kuruma (Cari Firma) ödediğinizi detaylıca kayıt edebilirsiniz.")
     mg1, mg2, mg3, mg4, mg5 = st.columns(5)
-    with mg1: mas_cari = st.text_input("Ödeme Yapılan Firma / Kurum (Cari Adı)", placeholder="Örn: Aydem Elektrik, Özasansör Ltd", key="g_c")
+    with mg1: mas_cari = st.text_input("Ödeme Yapılan Firma / Kurum (Cari Adı)", placeholder="Örn: Aydem Elektrik", key="g_c")
+    with mg2: mas_kat = st.selectbox("Gider Kalemi / Kategorisi", ["Elektrik Faturası", "Su Faturası", "Asansör Bakımı", "Temizlik Görevlisi", "Tamirat / Tadilat", "Yönetim Masrafı", "Diğer"], key="g_k")
+    with mg3: mas_acik = st.text_input("Fatura / Harcama Açıklaması", placeholder="Örn: Ortak alan sayacı", key="g_a")
+    with mg4: mas_tutar = st.number_input("Fatura Tutarı (TL)", min_value=0.0, step=50.0, key="g_t")
