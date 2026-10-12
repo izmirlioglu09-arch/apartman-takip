@@ -29,9 +29,9 @@ def aidat_veritabani_yukle(df_sakinler):
                     v_tarih = "-"
                     v_durum = "Ödenmedi"
                     if not list(eski.index) == []:
-                        v_odenen = float(eski["Ödenen Tutar (TL)"].values[0])
-                        v_tarih = str(eski["Ödeme Tarihi"].values[0])
-                        v_durum = str(eski["Durum"].values[0])
+                        v_odenen = float(eski["Ödenen Tutar (TL)"].values[0]) if hasattr(eski["Ödenen Tutar (TL)"], "values") else float(eski["Ödenen Tutar (TL)"])
+                        v_tarih = str(eski["Ödeme Tarihi"].values[0]) if hasattr(eski["Ödeme Tarihi"], "values") else str(eski["Ödeme Tarihi"])
+                        v_durum = str(eski["Durum"].values[0]) if hasattr(eski["Durum"], "values") else str(eski["Durum"])
                     guncel.append({
                         "Daire No": g_adi, "Dönem Ay": ay, "Aidat Tutarı (TL)": float(row["Aylık Aidat (TL)"]),
                         "Ödenen Tutar (TL)": v_odenen, "Ödeme Tarihi": v_tarih, "Durum": v_durum
@@ -78,7 +78,6 @@ with col3:
     filt = df_aidat[(df_aidat["Daire No"] == secilen_daire) & (df_aidat["Dönem Ay"] == secilen_ay)]
     v_tutar = 500.0
     if not list(filt.index) == []:
-        # KESİN ÇÖZÜM: .values[0] kullanılarak Pandas serisindeki ilk değer doğrudan saf sayıya dönüştürüldü
         v_tutar = float(filt["Aidat Tutarı (TL)"].values[0])
     od_tutar = st.number_input("Ödenen Tutar (TL)", min_value=0.0, value=v_tutar, key="s1_t")
 with col4: od_durum = st.selectbox("Durum", ["Ödendi", "Ödenmedi"], key="s1_dur")
@@ -127,9 +126,7 @@ if not df_masraf.empty:
     st.markdown("##### 🗑️ Giriş Yapılmış Masrafı Listeden Sil")
     df_masraf_gosterim = df_masraf.copy()
     df_masraf_gosterim["Listele"] = "Tarih: " + df_masraf_gosterim["Tarih"].astype(str) + " | " + df_masraf_gosterim["Kategori"].astype(str) + " | " + df_masraf_gosterim["Açıklama"].astype(str) + " (" + df_masraf_gosterim["Tutar (TL)"].astype(str) + " TL)"
-    
     secilen_silinecek_masraf = st.selectbox("Silmek İstediğiniz Masraf Kaydını Seçin", df_masraf_gosterim["Listele"].unique(), key="m_sil_sec")
-    
     if st.button("🗑️ Seçilen Masrafı Tamamen Sil", type="secondary", key="m_sil_btn"):
         secili_indeks = df_masraf_gosterim[df_masraf_gosterim["Listele"] == secilen_silinecek_masraf].index
         df_masraf = df_masraf.drop(secili_indeks).reset_index(drop=True)
@@ -156,7 +153,7 @@ c3.metric("⚖️ Net Kasa", f"{t_net:,.2f} TL")
 st.markdown("---")
 
 # =================================================================
-# 📋 BÖLÜM 4: CARİ EKSTRE SORGULAMA ALANI
+# 📋 BÖLÜM 4: FINANSAL CARI EKSTRE LISTESI (HİZALAMA RİSKLERİ SIFIRLANDI)
 # =================================================================
 st.markdown("### 🔍 4. Finansal Cari Ekstre Listesi")
 ex_col1, ex_col2 = st.columns(2)
@@ -175,27 +172,18 @@ if not df_gelirler_filtreli.empty:
         df_gelirler_filtreli = df_gelirler_filtreli[df_gelirler_filtreli["Daire No"] == secilen_cari]
     for idx_g, row in df_gelirler_filtreli.iterrows():
         ekstre_listesi.append({
-            "Tarih": str(row["Ödeme Tarihi"]), 
-            "İşlem Türü": "Gelir (Aidat)",
-            "Açıklama / Sakin": str(row["Daire No"]), 
-            "Kategori / Dönem": str(row["Dönem Ay"]),
-            "Giren Bakiye (Gelir)": float(row["Ödenen Tutar (TL)"]), 
-            "Çıkan Bakiye (Gider)": 0.0
+            "Tarih": str(row["Ödeme Tarihi"]), "İşlem Türü": "Gelir (Aidat)",
+            "Açıklama / Sakin": str(row["Daire No"]), "Kategori / Dönem": str(row["Dönem Ay"]),
+            "Giren Bakiye (Gelir)": float(row["Ödenen Tutar (TL)"]), "Çıkan Bakiye (Gider)": 0.0
         })
 
 # Gider Verilerini Ekle
-if not df_masraf.empty and secilen_cari == "Tümü (Tüm Bina / Gelir+Gider)":
-    for idx_m, row in df_masraf.iterrows():
-        ekstre_listesi.append({
-            "Tarih": str(row["Tarih"]), 
-            "İşlem Türü": "Gider (Masraf)",
-            "Açıklama / Sakin": str(row["Açıklama"]), 
-            "Kategori / Dönem": str(row["Kategori"]),
-            "Giren Bakiye (Gelir)": 0.0, 
-            "Çıkan Bakiye (Gider)": float(row["Tutar (TL)"])
-        })
+if not df_masraf.empty:
+    if secilen_cari == "Tümü (Tüm Bina / Gelir+Gider)":
+        for idx_m, row in df_masraf.iterrows():
+            ekstre_listesi.append({
+                "Tarih": str(row["Tarih"]), "İşlem Türü": "Gider (Masraf)",
+                "Açıklama / Sakin": str(row["Açıklama"]), "Kategori / Dönem": str(row["Kategori"]),
+                "Giren Bakiye (Gelir)": 0.0, "Çıkan Bakiye (Gider)": float(row["Tutar (TL)"])
+            })
 
-if len(ekstre_listesi) > 0:
-    df_ekstre = pd.DataFrame(ekstre_listesi)
-    
-    if ekstre_turu == "Sadece Gelirler (Aidat)":
