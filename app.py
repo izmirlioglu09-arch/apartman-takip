@@ -95,7 +95,7 @@ def pdf_ekstre_uret(cari_isim, b_tar, bit_tar, df_veri, t_giriis, t_cikis):
     t_data.append([Paragraph("TOPLAM", s_normal), Paragraph("", s_normal), Paragraph("", s_normal), Paragraph(f"{t_giriis:,.2f} TL", s_normal), Paragraph(f"{t_cikis:,.2f} TL", s_normal)])
     t_data.append([Paragraph("NET DURUM (BAKIYE)", s_normal), Paragraph("", s_normal), Paragraph("", s_normal), Paragraph(f"{(t_giriis - t_cikis):,.2f} TL", s_normal), Paragraph("", s_normal)])
     
-    tablo = Table(t_data, colWidths=[65, 95, 180, 100, 100])
+    tablo = Table(t_data, colWidths=[65, 95, 160, 110, 110])
     tablo.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2c3e50')),
         ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
@@ -115,6 +115,7 @@ df_sakin_ayarlari = sakin_ayarlarini_yukle()
 df_aidat = aidat_veritabani_yukle(df_sakin_ayarlari)
 df_masraf = masraf_veritabani_yukle()
 
+# Sekme tanımlamaları arasındaki çakışma yaratan eski kod satırı tamamen silindi
 m_s1, m_s2, m_s3, m_s4, m_s5 = st.tabs([
     "⚙️ 1. Sakin & Aidat Tanımlama", 
     "💰 2. Cari Aidat Tahsilatı", 
@@ -131,7 +132,6 @@ with m_s1:
     ay_s_ad = c2.text_input("Sakin Adı Soyadı (Cari Ünvan)", key="t_s")
     ay_a_tut = c3.number_input("Aylık Sabit Aidat Borcu (TL)", min_value=0.0, value=500.0, step=50.0, key="t_a")
     
-    # KESİN ÇÖZÜM: Girinti hatası veren tüm if yapıları düzleştirildi
     btn_sakin_tetik = st.button("🔄 Sakin Bilgisini ve Aidatını Sisteme İşle", key="t_btn", type="primary")
     if btn_sakin_tetik and ay_d_no and ay_s_ad:
         if ay_d_no in df_sakin_ayarlari["Daire No"].values:
