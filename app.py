@@ -2,11 +2,24 @@ import streamlit as st
 import pandas as pd
 import datetime
 import os
+import io
+
+# PDF Altyapısı (ReportLab)
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 # Veritabanı Dosya İsimleri
 AIDAT_FILE = "aidat_veritabanı.xlsx"
 MASRAF_FILE = "masraf_veritabanı.xlsx"
 SAKIN_AYAR_FILE = "sakin_ayarları.xlsx"
+
+# PDF Türkçe Font Tanımlaması (Bulut sunucu uyumluluğu için standart Helvetica düşüşlü)
+FONT_N = 'Helvetica'
+FONT_B = 'Helvetica-Bold'
 
 def sakin_ayarlarini_yukle():
     if os.path.exists(SAKIN_AYAR_FILE): 
@@ -21,7 +34,7 @@ def aidat_veritabani_yukle(df_sakinler):
         try:
             df_aidat = pd.read_excel(AIDAT_FILE)
             guncel = []
-            for idx_s, row in df_sakinler.iterrows():
+            for _, row in df_sakinler.iterrows():
                 g_adi = f"{row['Daire No']} - {row['Sakin Adı']}"
                 for ay in aylar:
                     eski = df_aidat[(df_aidat["Daire No"].str.startswith(f"{row['Daire No']} -")) & (df_aidat["Dönem Ay"] == ay)]
@@ -29,9 +42,9 @@ def aidat_veritabani_yukle(df_sakinler):
                     v_tarih = "-"
                     v_durum = "Ödenmedi"
                     if not list(eski.index) == []:
-                        v_odenen = float(eski["Ödenen Tutar (TL)"].values[0]) if hasattr(eski["Ödenen Tutar (TL)"], "values") else float(eski["Ödenen Tutar (TL)"])
-                        v_tarih = str(eski["Ödeme Tarihi"].values[0]) if hasattr(eski["Ödeme Tarihi"], "values") else str(eski["Ödeme Tarihi"])
-                        v_durum = str(eski["Durum"].values[0]) if hasattr(eski["Durum"], "values") else str(eski["Durum"])
+                        v_odenen = float(eski["Ödenen Tutar (TL)"].values) if hasattr(eski["Ödenen Tutar (TL)"], "values") else float(eski["Ödenen Tutar (TL)"])
+                        v_tarih = str(eski["Ödeme Tarihi"].values) if hasattr(eski["Ödeme Tarihi"], "values") else str(eski["Ödeme Tarihi"])
+                        v_durum = str(eski["Durum"].values) if hasattr(eski["Durum"], "values") else str(eski["Durum"])
                     guncel.append({
                         "Daire No": g_adi, "Dönem Ay": ay, "Aidat Tutarı (TL)": float(row["Aylık Aidat (TL)"]),
                         "Ödenen Tutar (TL)": v_odenen, "Ödeme Tarihi": v_tarih, "Durum": v_durum
@@ -39,11 +52,10 @@ def aidat_veritabani_yukle(df_sakinler):
             df = pd.DataFrame(guncel)
             df.to_excel(AIDAT_FILE, index=False)
             return df
-        except: 
-            pass
+        except: pass
     
     veriler = []
-    for idx_s, r in df_sakinler.iterrows():
+    for _, r in df_sakinler.iterrows():
         for ay in aylar:
             veriler.append({
                 "Daire No": f"{r['Daire No']} - {r['Sakin Adı']}", "Dönem Ay": ay, "Aidat Tutarı (TL)": float(r["Aylık Aidat (TL)"]), "Ödenen Tutar (TL)": 0.0, "Ödeme Tarihi": "-", "Durum": "Ödenmedi"
@@ -53,137 +65,126 @@ def aidat_veritabani_yukle(df_sakinler):
     return df
 
 def masraf_veritabani_yukle():
-    if os.path.exists(MASRAF_FILE): 
-        return pd.read_excel(MASRAF_FILE)
-    df = pd.DataFrame(columns=["Tarih", "Kategori", "Açıklama", "Tutar (TL)"])
+    if os.path.exists(MASRAF_FILE): return pd.read_excel(MASRAF_FILE)
+    df = pd.DataFrame(columns=["Tarih", "Cari Adı / Kurum", "Kategori", "Açıklama", "Tutar (TL)"])
     df.to_excel(MASRAF_FILE, index=False)
     return df
 
-# Sayfa Yapılandırması
-st.set_page_config(page_title="Apartman Yönetimi", layout="wide", page_icon="🏢")
-st.title("🏢 Profesyonel Apartman Finans Takip Sistemi")
+# PDF Üretme Modülü (Türkçe Karakter Kararlılık Ayarlı)
+def pdf_ekstre_uret(cari_isim, b_tar, bit_tar, df_veri, t_giriis, t_cikis):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    story = []
+    
+    s_baslik = ParagraphStyle('B', fontName=FONT_B, fontSize=16, spaceAfter=15, alignment=1)
+    s_normal = ParagraphStyle('N', fontName=FONT_N, fontSize=9)
+    s_t_baslik = ParagraphStyle('TB', fontName=FONT_B, fontSize=9, textColor=colors.whitesmoke)
+    
+    # Başlık Alanı
+    story.append(Paragraph(f"APARTMAN YONETIMI MALI CARI EKSTRE RAPORU", s_baslik))
+    story.append(Paragraph(f"<b>Cari Hesap:</b> {cari_isim} | <b>Donem:</b> {b_tar.strftime('%d.%m.%Y')} - {bit_tar.strftime('%d.%m.%Y')}", s_normal))
+    story.append(Spacer(1, 15))
+    
+    # Tablo Başlıkları
+    t_data = [[Paragraph("Tarih", s_t_baslik), Paragraph("Islem", s_t_baslik), Paragraph("Aciklama", s_t_baslik), Paragraph("Gelir (TL)", s_t_baslik), Paragraph("Gider (TL)", s_t_baslik)]]
+    
+    for _, r in df_veri.iterrows():
+        t_data.append([
+            Paragraph(str(r["Tarih"]), s_normal), Paragraph(str(r["Islem"]), s_normal),
+            Paragraph(str(r["Aciklama"]), s_normal), Paragraph(f"{r['Gelir']:,.2f} TL", s_normal), Paragraph(f"{r['Gider']:,.2f} TL", s_normal)
+        ])
+        
+    # Özet Satırı
+    t_data.append([Paragraph("<b>TOPLAM</b>", s_normal), Paragraph("", s_normal), Paragraph("", s_normal), Paragraph(f"<b>{t_giriis:,.2f} TL</b>", s_normal), Paragraph(f"<b>{t_cikis:,.2f} TL</b>", s_normal)])
+    t_data.append([Paragraph("<b>NET DURUM (BAKIYE)</b>", s_normal), Paragraph("", s_normal), Paragraph("", s_normal), Paragraph(f"<b>{(t_giriis - t_cikis):,.2f} TL</b>", s_normal), Paragraph("", s_normal)])
+    
+    tablo = Table(t_data, colWidths=[65, 80, 180, 95, 95])
+    tablo.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2c3e50')),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('PADDING', (0,0), (-1,-1), 5),
+        ('BACKGROUND', (0,-2), (-1,-1), colors.HexColor('#f8f9fa'))
+    ]))
+    story.append(tablo)
+    
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+st.set_page_config(page_title="Cari Apartman Takip", layout="wide", page_icon="🏢")
+st.title("🏢 Kurumsal Cari Tabanlı Apartman Yönetim Sistemi")
 
 df_sakin_ayarlari = sakin_ayarlarini_yukle()
 df_aidat = aidat_veritabani_yukle(df_sakin_ayarlari)
 df_masraf = masraf_veritabani_yukle()
 
-# =================================================================
-# 📋 BÖLÜM 1: AİDAT TAHSİLATI ALMA VE İPTAL ETME (SİLME) ALANI
-# =================================================================
-st.markdown("### 💰 1. Yeni Aidat Ödemesi Al / Düzenle / İptal Et")
-col1, col2, col3, col4, col5 = st.columns(5)
-with col1: secilen_daire = st.selectbox("Daire / Sakin Seçin", df_aidat["Daire No"].unique(), key="s1_d")
-with col2: secilen_ay = st.selectbox("Dönem Ayı Seçin", df_aidat["Dönem Ay"].unique(), key="s1_a")
-with col3:
-    filt = df_aidat[(df_aidat["Daire No"] == secilen_daire) & (df_aidat["Dönem Ay"] == secilen_ay)]
-    v_tutar = 500.0
-    if not list(filt.index) == []:
-        v_tutar = float(filt["Aidat Tutarı (TL)"].values[0])
-    od_tutar = st.number_input("Ödenen Tutar (TL)", min_value=0.0, value=v_tutar, key="s1_t")
-with col4: od_durum = st.selectbox("Durum", ["Ödendi", "Ödenmedi"], key="s1_dur")
-with col5: sec_tarih = st.date_input("Tahsilat Tarihi", value=datetime.date.today(), format="DD.MM.YYYY", key="s1_tar")
+# Yenilenen 5 Ana Kurumsal Modül
+m_s1, m_s2, m_s3, m_s4, m_s5 = st.tabs([
+    "⚙️ 1. Sakin & Aidat Tanımlama", 
+    "💰 2. Cari Aidat Tahsilatı", 
+    "📉 3. Cari Masraf & Kalem Girişi", 
+    "🔍 4. Tarih & Cari Raporlama Panel",
+    "📊 5. Aylık Mali Özet"
+])
+
+# --- MODÜL 1: SAKİN VE SABİT AİDAT TANIMLAMA ---
+with m_s1:
+    st.header("⚙️ Bina Sakinlerini ve Aidat Miktarlarını Tanımla")
+    st.caption("Dairelerde oturan sakinlerin adını ve o daireye özel aylık sabit aidat borcunu buradan belirleyebilirsiniz.")
+    c1, c2, c3 = st.columns(3)
+    with c1: ay_d_no = st.text_input("Daire Numarası (Örn: Daire 1)", key="t_d")
+    with a2: ay_s_ad = st.text_input("Sakin Adı Soyadı (Cari Ünvan)", key="t_s")
+    with a3: ay_a_tut = st.number_input("Aylık Sabit Aidat Borcu (TL)", min_value=0.0, value=500.0, step=50.0, key="t_a")
     
-c_btn1, c_btn2 = st.columns(2)
-with c_btn1:
-    if st.button("💾 Kaydet", type="primary", key="s1_btn"):
-        idx = df_aidat[(df_aidat["Daire No"] == secilen_daire) & (df_aidat["Dönem Ay"] == secilen_ay)].index
-        df_aidat.loc[idx, "Ödenen Tutar (TL)"] = od_tutar
-        df_aidat.loc[idx, "Durum"] = od_durum
-        df_aidat.loc[idx, "Ödeme Tarihi"] = sec_tarih.strftime("%d.%m.%Y") if od_durum == "Ödendi" else "-"
-        df_aidat.to_excel(AIDAT_FILE, index=False)
-        st.success("✅ Aidat kaydı güncellendi!")
-        st.rerun()
-with c_btn2:
-    if st.button("❌ Bu Ayın Aidat Ödemesini Sil (Sıfırla)", type="secondary", key="s1_sil_btn"):
-        idx = df_aidat[(df_aidat["Daire No"] == secilen_daire) & (df_aidat["Dönem Ay"] == secilen_ay)].index
-        df_aidat.loc[idx, "Ödenen Tutar (TL)"] = 0.0
-        df_aidat.loc[idx, "Durum"] = "Ödenmedi"
-        df_aidat.loc[idx, "Ödeme Tarihi"] = "-"
-        df_aidat.to_excel(AIDAT_FILE, index=False)
-        st.warning("🗑️ Aidat ödeme kaydı silindi ve borç ödenmedi durumuna getirildi!")
-        st.rerun()
+    if st.button("🔄 Sakin Bilgisini ve Aidatını Sisteme İşle", key="t_btn", type="primary"):
+        if ay_d_no and ay_s_ad:
+            if ay_d_no in df_sakin_ayarlari["Daire No"].values:
+                idx = df_sakin_ayarlari[df_sakin_ayarlari["Daire No"] == ay_d_no].index
+                df_sakin_ayarlari.loc[idx, "Sakin Adı"] = ay_s_ad
+                df_sakin_ayarlari.loc[idx, "Aylık Aidat (TL)"] = ay_a_tut
+            else:
+                df_sakin_ayarlari = pd.concat([df_sakin_ayarlari, pd.DataFrame([{"Daire No": ay_d_no, "Sakin Adı": ay_s_ad, "Aylık Aidat (TL)": ay_a_tut}])], ignore_index=True)
+            df_sakin_ayarlari.to_excel(SAKIN_AYAR_FILE, index=False)
+            st.success("✅ Sakin ve aidat şablonu başarıyla güncellendi!")
+            st.rerun()
+    st.dataframe(df_sakin_ayarlari, use_container_width=True)
 
-st.markdown("---")
-
-# =================================================================
-# 📋 BÖLÜM 2: BINA MASRAFI EKLEME VE SEÇİLENİ SİLME ALANI
-# =================================================================
-st.markdown("### 📉 2. Yeni Bina Masrafı Ekle / Kayıtlı Masrafı Sil")
-m1, m2, m3, m4 = st.columns(4)
-with m1: m_kat = st.selectbox("Masraf Kategorisi", ["Elektrik Faturası", "Su Faturası", "Asansör Bakımı", "Temizlik Görevlisi", "Tamirat / Tadilat", "Diğer"], key="s2_k")
-with m2: m_acik = st.text_input("Masraf Açıklaması", key="s2_a")
-with m3: m_tutar = st.number_input("Masraf Tutarı (TL)", min_value=0.0, step=50.0, key="s2_t")
-with m4: m_tar = st.date_input("Masraf Tarihi", value=datetime.date.today(), format="DD.MM.YYYY", key="s2_tar")
+# --- MODÜL 2: CARİ BAZLI AİDAT TAHSİLAT PANELİ ---
+with m_s2:
+    st.header("💰 Cari Hesap Aidat Tahsilat Girişi")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1: sec_daire = st.selectbox("Tahsilat Yapılan Sakin / Cari", df_aidat["Daire No"].unique(), key="c_d")
+    with col2: sec_ay = st.selectbox("Aidat Dönem Ayı", df_aidat["Dönem Ay"].unique(), key="c_a")
+    with col3:
+        filt = df_aidat[(df_aidat["Daire No"] == sec_daire) & (df_aidat["Dönem Ay"] == sec_ay)]
+        v_tutar = float(filt["Aidat Tutarı (TL)"].values) if not list(filt.index) == [] else 500.0
+        od_tutar = st.number_input("Tahsil Edilen Tutar (TL)", min_value=0.0, value=v_tutar, key="c_t")
+    with col4: od_durum = st.selectbox("Ödeme Durumu", ["Ödendi", "Ödenmedi"], key="c_dur")
+    with col5: sec_tarih = st.date_input("Kasa İşlem Tarihi", value=datetime.date.today(), format="DD.MM.YYYY", key="c_tar")
     
-if st.button("🔴 Masrafı Kasaya İşle", key="s2_btn"):
-    yeni = pd.DataFrame([{"Tarih": m_tar.strftime("%d.%m.%Y"), "Kategori": m_kat, "Açıklama": m_acik, "Tutar (TL)": m_tutar}])
-    df_masraf = pd.concat([df_masraf, yeni], ignore_index=True)
-    df_masraf.to_excel(MASRAF_FILE, index=False)
-    st.error("📉 Gider kasaya işlendi.")
-    st.rerun()
+    b1, b2 = st.columns(2)
+    with b1:
+        if st.button("💾 Tahsilatı Cari Kasa Defterine İşle", type="primary", key="c_kaydet"):
+            idx = df_aidat[(df_aidat["Daire No"] == sec_daire) & (df_aidat["Dönem Ay"] == sec_ay)].index
+            df_aidat.loc[idx, "Ödenen Tutar (TL)"] = od_tutar
+            df_aidat.loc[idx, "Durum"] = od_durum
+            df_aidat.loc[idx, "Ödeme Tarihi"] = sec_tarih.strftime("%d.%m.%Y") if od_durum == "Ödendi" else "-"
+            df_aidat.to_excel(AIDAT_FILE, index=False)
+            st.success("✅ Aidat tahsilatı ilgili carinin hesabına işlendi!")
+            st.rerun()
+    with b2:
+        if st.button("❌ Seçili Ayın Ödemesini İptal Et (Sil)", key="c_sil"):
+            idx = df_aidat[(df_aidat["Daire No"] == sec_daire) & (df_aidat["Dönem Ay"] == sec_ay)].index
+            df_aidat.loc[idx, "Ödenen Tutar (TL)"] = 0.0
+            df_aidat.loc[idx, "Durum"] = "Ödenmedi"
+            df_aidat.loc[idx, "Ödeme Tarihi"] = "-"
+            df_aidat.to_excel(AIDAT_FILE, index=False)
+            st.warning("🗑️ Ödeme iptal edildi, cari borçlandırıldı.")
+            st.rerun()
 
-if not df_masraf.empty:
-    st.markdown("##### 🗑️ Giriş Yapılmış Masrafı Listeden Sil")
-    df_masraf_gosterim = df_masraf.copy()
-    df_masraf_gosterim["Listele"] = "Tarih: " + df_masraf_gosterim["Tarih"].astype(str) + " | " + df_masraf_gosterim["Kategori"].astype(str) + " | " + df_masraf_gosterim["Açıklama"].astype(str) + " (" + df_masraf_gosterim["Tutar (TL)"].astype(str) + " TL)"
-    secilen_silinecek_masraf = st.selectbox("Silmek İstediğiniz Masraf Kaydını Seçin", df_masraf_gosterim["Listele"].unique(), key="m_sil_sec")
-    if st.button("🗑️ Seçilen Masrafı Tamamen Sil", type="secondary", key="m_sil_btn"):
-        secili_indeks = df_masraf_gosterim[df_masraf_gosterim["Listele"] == secilen_silinecek_masraf].index
-        df_masraf = df_masraf.drop(secili_indeks).reset_index(drop=True)
-        df_masraf.to_excel(MASRAF_FILE, index=False)
-        st.success("✅ Seçilen masraf kaydı başarıyla silindi!")
-        st.rerun()
-
-st.markdown("---")
-
-# =================================================================
-# 📋 BÖLÜM 3: AYLIK MALİ DURUM RAPORU
-# =================================================================
-st.markdown("### 📊 3. Aylık Finansal Özet Raporları")
-rep_ay = st.selectbox("Raporunu Görmek İstediğiniz Ayı Seçin", ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"], key="s3_ay")
-f_gelir = df_aidat[(df_aidat["Dönem Ay"] == rep_ay) & (df_aidat["Durum"].str.contains("Ödendi", na=False))]
-t_gelir = f_gelir["Ödenen Tutar (TL)"].sum()
-t_gider = df_masraf["Tutar (TL)"].sum() if not df_masraf.empty else 0.0
-t_net = t_gelir - t_gider
-c1, c2, c3 = st.columns(3)
-c1.metric("🟢 Toplam Gelir", f"{t_gelir:,.2f} TL")
-c2.metric("🔴 Toplam Gider", f"{t_gider:,.2f} TL")
-c3.metric("⚖️ Net Kasa", f"{t_net:,.2f} TL")
-
-st.markdown("---")
-
-# =================================================================
-# 📋 BÖLÜM 4: FINANSAL CARI EKSTRE LISTESI (HİZALAMA RİSKLERİ SIFIRLANDI)
-# =================================================================
-st.markdown("### 🔍 4. Finansal Cari Ekstre Listesi")
-ex_col1, ex_col2 = st.columns(2)
-with ex_col1:
-    cari_liste = ["Tümü (Tüm Bina / Gelir+Gider)"] + list(df_aidat["Daire No"].unique())
-    secilen_cari = st.selectbox("Cari Hesap Seçin", cari_liste, key="ex_cari")
-with ex_col2:
-    ekstre_turu = st.selectbox("Filtreleme Türü", ["Tümü", "Sadece Gelirler (Aidat)", "Sadece Giderler (Masraf)"], key="ex_tur")
-
-ekstre_listesi = []
-
-# Gelir Verilerini Ekle
-df_gelirler_filtreli = df_aidat[df_aidat["Durum"].str.contains("Ödendi", na=False)].copy()
-if not df_gelirler_filtreli.empty:
-    if secilen_cari != "Tümü (Tüm Bina / Gelir+Gider)":
-        df_gelirler_filtreli = df_gelirler_filtreli[df_gelirler_filtreli["Daire No"] == secilen_cari]
-    for idx_g, row in df_gelirler_filtreli.iterrows():
-        ekstre_listesi.append({
-            "Tarih": str(row["Ödeme Tarihi"]), "İşlem Türü": "Gelir (Aidat)",
-            "Açıklama / Sakin": str(row["Daire No"]), "Kategori / Dönem": str(row["Dönem Ay"]),
-            "Giren Bakiye (Gelir)": float(row["Ödenen Tutar (TL)"]), "Çıkan Bakiye (Gider)": 0.0
-        })
-
-# Gider Verilerini Ekle
-if not df_masraf.empty:
-    if secilen_cari == "Tümü (Tüm Bina / Gelir+Gider)":
-        for idx_m, row in df_masraf.iterrows():
-            ekstre_listesi.append({
-                "Tarih": str(row["Tarih"]), "İşlem Türü": "Gider (Masraf)",
-                "Açıklama / Sakin": str(row["Açıklama"]), "Kategori / Dönem": str(row["Kategori"]),
-                "Giren Bakiye (Gelir)": 0.0, "Çıkan Bakiye (Gider)": float(row["Tutar (TL)"])
-            })
-
+# --- MODÜL 3: CARİ BAZLI MASRAF VE KALEM GİRİŞİ ---
+with m_s3:
+    st.header("📉 Cari Firma / Kurum Gider Girişi")
+    st.caption("Binanın ortak masraflarını hangi kategoriyle ve hangi şirkete/kuruma (Cari Firma) ödediğinizi detaylıca kayıt edebilirsiniz.")
+    mg1, mg2, mg3, mg4, mg5 = st.columns(5)
+    with mg1: mas_cari = st.text_input("Ödeme Yapılan Firma / Kurum (Cari Adı)", placeholder="Örn: Aydem Elektrik, Özasansör Ltd", key="g_c")
