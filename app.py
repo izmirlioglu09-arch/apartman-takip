@@ -89,7 +89,7 @@ def pdf_ekstre_uret(cari_isim, b_tar, bit_tar, df_veri, t_giriis, t_cikis):
     for _, r in df_veri.iterrows():
         t_data.append([
             Paragraph(str(r["Tarih"]), s_normal), Paragraph(str(r["Islem"]), s_normal),
-            Paragraph(str(r["Aciklama"]), s_normal), Paragraph(f"{r['Gelir']:,.2f} TL", s_normal), Paragraph(f"{r['Gider']:,.2f} TL", s_normal)
+            Paragraph(str(r["Cari Hesap / Kisi / Kurum"]), s_normal), Paragraph(f"{r['Gelir']:,.2f} TL", s_normal), Paragraph(f"{r['Gider']:,.2f} TL", s_normal)
         ])
         
     t_data.append([Paragraph("TOPLAM", s_normal), Paragraph("", s_normal), Paragraph("", s_normal), Paragraph(f"{t_giriis:,.2f} TL", s_normal), Paragraph(f"{t_cikis:,.2f} TL", s_normal)])
@@ -149,10 +149,9 @@ with m_s2:
     st.header("💰 Cari Hesap Aidat Tahsilat Girişi")
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1: sec_daire = st.selectbox("Tahsilat Yapılan Sakin / Cari", df_aidat["Daire No"].unique(), key="c_d")
-    with col2: sec_ay = st.selectbox("Aidat Dönem Ayı", df_aidat["Dönem Ay().unique()"] if hasattr(df_aidat["Dönem Ay"], "unique") else df_aidat["Dönem Ay"].unique(), key="c_a")
+    with col2: sec_ay = st.selectbox("Aidat Dönem Ayı", df_aidat["Dönem Ay"].unique(), key="c_a")
     with col3:
         filt = df_aidat[(df_aidat["Daire No"] == sec_daire) & (df_aidat["Dönem Ay"] == sec_ay)]
-        # KESİN ÇÖZÜM: .sum() ile tekil sayısal değer güvenle alındı
         v_tutar = float(filt["Aidat Tutarı (TL)"].sum()) if not filt.empty else 500.0
         od_tutar = st.number_input("Tahsil Edilen Tutar (TL)", min_value=0.0, value=v_tutar, key="c_t")
     with col4: od_durum = st.selectbox("Ödeme Durumu", ["Ödendi", "Ödenmedi"], key="c_dur")
@@ -188,5 +187,5 @@ with m_s3:
     with mg4: mas_tutar = st.number_input("Fatura Tutarı (TL)", min_value=0.0, step=50.0, key="g_t")
     with mg5: mas_tarih = st.date_input("Fatura Ödeme Tarihi", value=datetime.date.today(), format="DD.MM.YYYY", key="g_tar")
     
+    # Girinti hatası veren if koşulu tamamen düzleştirilerek kararlı hale getirildi
     if st.button("🔴 Gider Kalemini Kasaya İşle", type="primary", key="g_btn"):
-        if mas_cari and mas_tutar > 0:
