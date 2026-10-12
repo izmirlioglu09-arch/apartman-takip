@@ -39,10 +39,10 @@ def aidat_veritabani_yukle(df_sakinler):
                     v_odenen = 0.0
                     v_tarih = "-"
                     v_durum = "Ödenmedi"
-                    if not list(eski.index) == []:
-                        v_odenen = float(eski["Ödenen Tutar (TL)"].iloc) if hasattr(eski["Ödenen Tutar (TL)"], "iloc") else float(eski["Ödenen Tutar (TL)"])
-                        v_tarih = str(eski["Ödeme Tarihi"].iloc) if hasattr(eski["Ödeme Tarihi"], "iloc") else str(eski["Ödeme Tarihi"])
-                        v_durum = str(eski["Durum"].iloc) if hasattr(eski["Durum"], "iloc") else str(eski["Durum"])
+                    if not eski.empty:
+                        v_odenen = float(eski["Ödenen Tutar (TL)"].sum())
+                        v_tarih = str(eski["Ödeme Tarihi"].iloc[0])
+                        v_durum = str(eski["Durum"].iloc[0])
                     guncel.append({
                         "Daire No": g_adi, "Dönem Ay": ay, "Aidat Tutarı (TL)": float(row["Aylık Aidat (TL)"]),
                         "Ödenen Tutar (TL)": v_odenen, "Ödeme Tarihi": v_tarih, "Durum": v_durum
@@ -70,7 +70,7 @@ def masraf_veritabani_yukle():
     df.to_excel(MASRAF_FILE, index=False)
     return df
 
-# PDF Üretme Modülü (Sütun genişliği kilitlenme hatası kesin olarak giderildi)
+# PDF Üretme Modülü
 def pdf_ekstre_uret(cari_isim, b_tar, bit_tar, df_veri, t_giriis, t_cikis):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
@@ -95,8 +95,7 @@ def pdf_ekstre_uret(cari_isim, b_tar, bit_tar, df_veri, t_giriis, t_cikis):
     t_data.append([Paragraph("TOPLAM", s_normal), Paragraph("", s_normal), Paragraph("", s_normal), Paragraph(f"{t_giriis:,.2f} TL", s_normal), Paragraph(f"{t_cikis:,.2f} TL", s_normal)])
     t_data.append([Paragraph("NET DURUM (BAKIYE)", s_normal), Paragraph("", s_normal), Paragraph("", s_normal), Paragraph(f"{(t_giriis - t_cikis):,.2f} TL", s_normal), Paragraph("", s_normal)])
     
-    # Sütun Genişlikleri Standart Sayısal Listeye Çevrilerek Hata Kökünden Çözüldü (Toplam 540pt)
-    tablo = Table(t_data, colWidths=[70, 110, 180, 90, 90])
+    tablo = Table(t_data, colWidths=[65, 95, 180, 100, 100])
     tablo.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2c3e50')),
         ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
@@ -116,12 +115,11 @@ df_sakin_ayarlari = sakin_ayarlarini_yukle()
 df_aidat = aidat_veritabani_yukle(df_sakin_ayarlari)
 df_masraf = masraf_veritabani_yukle()
 
-m_s1, m_s2, m_s3, m_s4, m_s5 = st.columns(5)
 m_s1, m_s2, m_s3, m_s4, m_s5 = st.tabs([
     "⚙️ 1. Sakin & Aidat Tanımlama", 
     "💰 2. Cari Aidat Tahsilatı", 
     "📉 3. Cari Masraf & Kalem Girişi", 
-    "🔍 4. Tarih & Cari Raporlama Panel",
+    "🔍 4. Tarih & Cari Raporlama Paneli",
     "📊 5. Aylık Mali Özet"
 ])
 
@@ -151,10 +149,11 @@ with m_s2:
     st.header("💰 Cari Hesap Aidat Tahsilat Girişi")
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1: sec_daire = st.selectbox("Tahsilat Yapılan Sakin / Cari", df_aidat["Daire No"].unique(), key="c_d")
-    with col2: sec_ay = st.selectbox("Aidat Dönem Ayı", df_aidat["Dönem Ay"].unique(), key="c_a")
+    with col2: sec_ay = st.selectbox("Aidat Dönem Ayı", df_aidat["Dönem Ay().unique()"] if hasattr(df_aidat["Dönem Ay"], "unique") else df_aidat["Dönem Ay"].unique(), key="c_a")
     with col3:
         filt = df_aidat[(df_aidat["Daire No"] == sec_daire) & (df_aidat["Dönem Ay"] == sec_ay)]
-        v_tutar = float(filt["Aidat Tutarı (TL)"].values) if not list(filt.index) == [] else 500.0
+        # KESİN ÇÖZÜM: .sum() ile tekil sayısal değer güvenle alındı
+        v_tutar = float(filt["Aidat Tutarı (TL)"].sum()) if not filt.empty else 500.0
         od_tutar = st.number_input("Tahsil Edilen Tutar (TL)", min_value=0.0, value=v_tutar, key="c_t")
     with col4: od_durum = st.selectbox("Ödeme Durumu", ["Ödendi", "Ödenmedi"], key="c_dur")
     with col5: sec_tarih = st.date_input("Kasa İşlem Tarihi", value=datetime.date.today(), format="DD.MM.YYYY", key="c_tar")
@@ -187,3 +186,7 @@ with m_s3:
     with mg2: mas_kat = st.selectbox("Gider Kalemi / Kategorisi", ["Elektrik Faturası", "Su Faturası", "Asansör Bakımı", "Temizlik Görevlisi", "Tamirat / Tadilat", "Yönetim Masrafı", "Diğer"], key="g_k")
     with mg3: mas_acik = st.text_input("Fatura / Harcama Açıklaması", placeholder="Örn: Ortak alan sayacı", key="g_a")
     with mg4: mas_tutar = st.number_input("Fatura Tutarı (TL)", min_value=0.0, step=50.0, key="g_t")
+    with mg5: mas_tarih = st.date_input("Fatura Ödeme Tarihi", value=datetime.date.today(), format="DD.MM.YYYY", key="g_tar")
+    
+    if st.button("🔴 Gider Kalemini Kasaya İşle", type="primary", key="g_btn"):
+        if mas_cari and mas_tutar > 0:
