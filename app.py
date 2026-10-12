@@ -131,8 +131,7 @@ with m_s1:
     ay_s_ad = c2.text_input("Sakin Adı Soyadı (Cari Ünvan)", key="t_s")
     ay_a_tut = c3.number_input("Aylık Sabit Aidat Borcu (TL)", min_value=0.0, value=500.0, step=50.0, key="t_a")
     
-    btn_sakin_tetik = st.button("🔄 Sakin Bilgisini ve Aidatını Sisteme İşle", key="t_btn", type="primary")
-    if btn_sakin_tetik and ay_d_no and ay_s_ad:
+    if st.button("🔄 Sakin Bilgisini ve Aidatını Sisteme İşle", key="t_btn", type="primary") and ay_d_no and ay_s_ad:
         if ay_d_no in df_sakin_ayarlari["Daire No"].values:
             idx = df_sakin_ayarlari[df_sakin_ayarlari["Daire No"] == ay_d_no].index
             df_sakin_ayarlari.loc[idx, "Sakin Adı"] = ay_s_ad
@@ -161,10 +160,7 @@ with m_s2:
     sec_tarih = col5.date_input("Kasa İşlem Tarihi", value=datetime.date.today(), format="DD.MM.YYYY", key="c_tar")
     
     b1, b2 = st.columns(2)
-    btn_kaydet_tetik = b1.button("💾 Tahsilatı Cari Kasa Defterine İşle", type="primary", key="c_kaydet")
-    btn_sil_tetik = b2.button("❌ Seçili Ayın Ödemesini İptal Et (Sil)", key="c_sil")
-    
-    if btn_kaydet_tetik:
+    if b1.button("💾 Tahsilatı Cari Kasa Defterine İşle", type="primary", key="c_kaydet"):
         idx = df_aidat[(df_aidat["Daire No"] == sec_daire) & (df_aidat["Dönem Ay"] == sec_ay)].index
         df_aidat.loc[idx, "Ödenen Tutar (TL)"] = od_tutar
         df_aidat.loc[idx, "Durum"] = od_durum
@@ -173,7 +169,7 @@ with m_s2:
         st.success("✅ Aidat tahsilatı ilgili carinin hesabına işlendi!")
         st.rerun()
         
-    if btn_sil_tetik:
+    if b2.button("❌ Seçili Ayın Ödemesini İptal Et (Sil)", key="c_sil"):
         idx = df_aidat[(df_aidat["Daire No"] == sec_daire) & (df_aidat["Dönem Ay"] == sec_ay)].index
         df_aidat.loc[idx, "Ödenen Tutar (TL)"] = 0.0
         df_aidat.loc[idx, "Durum"] = "Ödenmedi"
@@ -192,5 +188,6 @@ with m_s3:
     mas_tutar = mg4.number_input("Fatura Tutarı (TL)", min_value=0.0, step=50.0, key="g_t")
     mas_tarih = mg5.date_input("Fatura Ödeme Tarihi", value=datetime.date.today(), format="DD.MM.YYYY", key="g_tar")
     
-    btn_masraf_tetik = st.button("🔴 Gider Kalemini Kasaya İşle", type="primary", key="g_btn")
-    if btn_masraf_tetik and mas_cari and mas_tutar > 0:
+    # KESİN ÇÖZÜM: Tek satırlık and kontrolüyle girinti hatası tamamen engellendi
+    if st.button("🔴 Gider Kalemini Kasaya İşle", type="primary", key="g_btn") and mas_cari and mas_tutar > 0:
+        yeni_m = pd.DataFrame([{"Tarih": mas_tarih.strftime("%d.%m.%Y"), "Cari Adı / Kurum": mas_cari, "Kategori": mas_kat, "Açıklama": mas_acik, "Tutar (TL)": mas_tutar}])
