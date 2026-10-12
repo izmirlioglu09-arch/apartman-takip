@@ -41,8 +41,8 @@ def aidat_veritabani_yukle(df_sakinler):
                     v_durum = "Ödenmedi"
                     if not eski.empty:
                         v_odenen = float(eski["Ödenen Tutar (TL)"].sum())
-                        v_tarih = str(eski["Ödeme Tarihi"].iloc)
-                        v_durum = str(eski["Durum"].iloc)
+                        v_tarih = str(eski["Ödeme Tarihi"].iloc[0]) if hasattr(eski["Ödeme Tarihi"], "iloc") else str(eski["Ödeme Tarihi"])
+                        v_durum = str(eski["Durum"].iloc[0]) if hasattr(eski["Durum"], "iloc") else str(eski["Durum"])
                     guncel.append({
                         "Daire No": g_adi, "Dönem Ay": ay, "Aidat Tutarı (TL)": float(row["Aylık Aidat (TL)"]),
                         "Ödenen Tutar (TL)": v_odenen, "Ödeme Tarihi": v_tarih, "Durum": v_durum
@@ -115,7 +115,6 @@ df_sakin_ayarlari = sakin_ayarlarini_yukle()
 df_aidat = aidat_veritabani_yukle(df_sakin_ayarlari)
 df_masraf = masraf_veritabani_yukle()
 
-# Sekme tanımlamaları arasındaki çakışma yaratan eski kod satırı tamamen silindi
 m_s1, m_s2, m_s3, m_s4, m_s5 = st.tabs([
     "⚙️ 1. Sakin & Aidat Tanımlama", 
     "💰 2. Cari Aidat Tahsilatı", 
@@ -195,4 +194,3 @@ with m_s3:
     
     btn_masraf_tetik = st.button("🔴 Gider Kalemini Kasaya İşle", type="primary", key="g_btn")
     if btn_masraf_tetik and mas_cari and mas_tutar > 0:
-        yeni_m = pd.DataFrame([{"Tarih": mas_tarih.strftime("%d.%m.%Y"), "Cari Adı / Kurum": mas_cari, "Kategori": mas_kat, "Açıklama": mas_acik, "Tutar (TL)": mas_tutar}])
