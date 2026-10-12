@@ -41,8 +41,8 @@ def aidat_veritabani_yukle(df_sakinler):
                     v_durum = "Ödenmedi"
                     if not eski.empty:
                         v_odenen = float(eski["Ödenen Tutar (TL)"].sum())
-                        v_tarih = str(eski["Ödeme Tarihi"].iloc[0])
-                        v_durum = str(eski["Durum"].iloc[0])
+                        v_tarih = str(eski["Ödeme Tarihi"].iloc)
+                        v_durum = str(eski["Durum"].iloc)
                     guncel.append({
                         "Daire No": g_adi, "Dönem Ay": ay, "Aidat Tutarı (TL)": float(row["Aylık Aidat (TL)"]),
                         "Ödenen Tutar (TL)": v_odenen, "Ödeme Tarihi": v_tarih, "Durum": v_durum
@@ -84,7 +84,7 @@ def pdf_ekstre_uret(cari_isim, b_tar, bit_tar, df_veri, t_giriis, t_cikis):
     story.append(Paragraph(f"Cari Hesap: {cari_isim} | Donem: {b_tar.strftime('%d.%m.%Y')} - {bit_tar.strftime('%d.%m.%Y')}", s_normal))
     story.append(Spacer(1, 15))
     
-    t_data = [[Paragraph("Tarih", s_t_baslik), Paragraph("Islem", s_t_baslik), Paragraph("Aciklama", s_t_baslik), Paragraph("Gelir (TL)", s_t_baslik), Paragraph("Gider (TL)", s_t_baslik)]]
+    t_data = [[Paragraph("Tarih", s_t_baslik), Paragraph("Islem", s_t_baslik), Paragraph("Cari Hesap / Kisi / Kurum", s_t_baslik), Paragraph("Gelir (TL)", s_t_baslik), Paragraph("Gider (TL)", s_t_baslik)]]
     
     for _, r in df_veri.iterrows():
         t_data.append([
@@ -127,65 +127,72 @@ m_s1, m_s2, m_s3, m_s4, m_s5 = st.tabs([
 with m_s1:
     st.header("⚙️ Bina Sakinlerini ve Aidat Miktarlarını Tanımla")
     c1, c2, c3 = st.columns(3)
-    with c1: ay_d_no = st.text_input("Daire Numarası (Örn: Daire 1)", key="t_d")
-    with c2: ay_s_ad = st.text_input("Sakin Adı Soyadı (Cari Ünvan)", key="t_s")
-    with c3: ay_a_tut = st.number_input("Aylık Sabit Aidat Borcu (TL)", min_value=0.0, value=500.0, step=50.0, key="t_a")
+    ay_d_no = c1.text_input("Daire Numarası (Örn: Daire 1)", key="t_d")
+    ay_s_ad = c2.text_input("Sakin Adı Soyadı (Cari Ünvan)", key="t_s")
+    ay_a_tut = c3.number_input("Aylık Sabit Aidat Borcu (TL)", min_value=0.0, value=500.0, step=50.0, key="t_a")
     
-    if st.button("🔄 Sakin Bilgisini ve Aidatını Sisteme İşle", key="t_btn", type="primary"):
-        if ay_d_no and ay_s_ad:
-            if ay_d_no in df_sakin_ayarlari["Daire No"].values:
-                idx = df_sakin_ayarlari[df_sakin_ayarlari["Daire No"] == ay_d_no].index
-                df_sakin_ayarlari.loc[idx, "Sakin Adı"] = ay_s_ad
-                df_sakin_ayarlari.loc[idx, "Aylık Aidat (TL)"] = ay_a_tut
-            else:
-                df_sakin_ayarlari = pd.concat([df_sakin_ayarlari, pd.DataFrame([{"Daire No": ay_d_no, "Sakin Adı": ay_s_ad, "Aylık Aidat (TL)": ay_a_tut}])], ignore_index=True)
-            df_sakin_ayarlari.to_excel(SAKIN_AYAR_FILE, index=False)
-            st.success("✅ Sakin ve aidat şablonu başarıyla güncellendi!")
-            st.rerun()
+    # KESİN ÇÖZÜM: Girinti hatası veren tüm if yapıları düzleştirildi
+    btn_sakin_tetik = st.button("🔄 Sakin Bilgisini ve Aidatını Sisteme İşle", key="t_btn", type="primary")
+    if btn_sakin_tetik and ay_d_no and ay_s_ad:
+        if ay_d_no in df_sakin_ayarlari["Daire No"].values:
+            idx = df_sakin_ayarlari[df_sakin_ayarlari["Daire No"] == ay_d_no].index
+            df_sakin_ayarlari.loc[idx, "Sakin Adı"] = ay_s_ad
+            df_sakin_ayarlari.loc[idx, "Aylık Aidat (TL)"] = ay_a_tut
+        else:
+            df_sakin_ayarlari = pd.concat([df_sakin_ayarlari, pd.DataFrame([{"Daire No": ay_d_no, "Sakin Adı": ay_s_ad, "Aylık Aidat (TL)": ay_a_tut}])], ignore_index=True)
+        df_sakin_ayarlari.to_excel(SAKIN_AYAR_FILE, index=False)
+        st.success("✅ Sakin ve aidat şablonu başarıyla güncellendi!")
+        st.rerun()
     st.dataframe(df_sakin_ayarlari, use_container_width=True)
 
 # --- MODÜL 2: CARİ BAZLI AİDAT TAHSİLAT PANELİ ---
 with m_s2:
     st.header("💰 Cari Hesap Aidat Tahsilat Girişi")
     col1, col2, col3, col4, col5 = st.columns(5)
-    with col1: sec_daire = st.selectbox("Tahsilat Yapılan Sakin / Cari", df_aidat["Daire No"].unique(), key="c_d")
-    with col2: sec_ay = st.selectbox("Aidat Dönem Ayı", df_aidat["Dönem Ay"].unique(), key="c_a")
-    with col3:
-        filt = df_aidat[(df_aidat["Daire No"] == sec_daire) & (df_aidat["Dönem Ay"] == sec_ay)]
-        v_tutar = float(filt["Aidat Tutarı (TL)"].sum()) if not filt.empty else 500.0
-        od_tutar = st.number_input("Tahsil Edilen Tutar (TL)", min_value=0.0, value=v_tutar, key="c_t")
-    with col4: od_durum = st.selectbox("Ödeme Durumu", ["Ödendi", "Ödenmedi"], key="c_dur")
-    with col5: sec_tarih = st.date_input("Kasa İşlem Tarihi", value=datetime.date.today(), format="DD.MM.YYYY", key="c_tar")
+    sec_daire = col1.selectbox("Tahsilat Yapılan Sakin / Cari", df_aidat["Daire No"].unique(), key="c_d")
+    sec_ay = col2.selectbox("Aidat Dönem Ayı", df_aidat["Dönem Ay"].unique(), key="c_a")
+    
+    filt = df_aidat[(df_aidat["Daire No"] == sec_daire) & (df_aidat["Dönem Ay"] == sec_ay)]
+    v_tutar = 500.0
+    if not filt.empty:
+        v_tutar = float(filt["Aidat Tutarı (TL)"].sum())
+        
+    od_tutar = col3.number_input("Tahsil Edilen Tutar (TL)", min_value=0.0, value=v_tutar, key="c_t")
+    od_durum = col4.selectbox("Ödeme Durumu", ["Ödendi", "Ödenmedi"], key="c_dur")
+    sec_tarih = col5.date_input("Kasa İşlem Tarihi", value=datetime.date.today(), format="DD.MM.YYYY", key="c_tar")
     
     b1, b2 = st.columns(2)
-    with b1:
-        if st.button("💾 Tahsilatı Cari Kasa Defterine İşle", type="primary", key="c_kaydet"):
-            idx = df_aidat[(df_aidat["Daire No"] == sec_daire) & (df_aidat["Dönem Ay"] == sec_ay)].index
-            df_aidat.loc[idx, "Ödenen Tutar (TL)"] = od_tutar
-            df_aidat.loc[idx, "Durum"] = od_durum
-            df_aidat.loc[idx, "Ödeme Tarihi"] = sec_tarih.strftime("%d.%m.%Y") if od_durum == "Ödendi" else "-"
-            df_aidat.to_excel(AIDAT_FILE, index=False)
-            st.success("✅ Aidat tahsilatı ilgili carinin hesabına işlendi!")
-            st.rerun()
-    with b2:
-        if st.button("❌ Seçili Ayın Ödemesini İptal Et (Sil)", key="c_sil"):
-            idx = df_aidat[(df_aidat["Daire No"] == sec_daire) & (df_aidat["Dönem Ay"] == sec_ay)].index
-            df_aidat.loc[idx, "Ödenen Tutar (TL)"] = 0.0
-            df_aidat.loc[idx, "Durum"] = "Ödenmedi"
-            df_aidat.loc[idx, "Ödeme Tarihi"] = "-"
-            df_aidat.to_excel(AIDAT_FILE, index=False)
-            st.warning("🗑️ Ödeme iptal edildi, cari borçlandırıldı.")
-            st.rerun()
+    btn_kaydet_tetik = b1.button("💾 Tahsilatı Cari Kasa Defterine İşle", type="primary", key="c_kaydet")
+    btn_sil_tetik = b2.button("❌ Seçili Ayın Ödemesini İptal Et (Sil)", key="c_sil")
+    
+    if btn_kaydet_tetik:
+        idx = df_aidat[(df_aidat["Daire No"] == sec_daire) & (df_aidat["Dönem Ay"] == sec_ay)].index
+        df_aidat.loc[idx, "Ödenen Tutar (TL)"] = od_tutar
+        df_aidat.loc[idx, "Durum"] = od_durum
+        df_aidat.loc[idx, "Ödeme Tarihi"] = sec_tarih.strftime("%d.%m.%Y") if od_durum == "Ödendi" else "-"
+        df_aidat.to_excel(AIDAT_FILE, index=False)
+        st.success("✅ Aidat tahsilatı ilgili carinin hesabına işlendi!")
+        st.rerun()
+        
+    if btn_sil_tetik:
+        idx = df_aidat[(df_aidat["Daire No"] == sec_daire) & (df_aidat["Dönem Ay"] == sec_ay)].index
+        df_aidat.loc[idx, "Ödenen Tutar (TL)"] = 0.0
+        df_aidat.loc[idx, "Durum"] = "Ödenmedi"
+        df_aidat.loc[idx, "Ödeme Tarihi"] = "-"
+        df_aidat.to_excel(AIDAT_FILE, index=False)
+        st.warning("🗑️ Ödeme iptal edildi, cari borçlandırıldı.")
+        st.rerun()
 
 # --- MODÜL 3: CARİ BAZLI MASRAF VE KALEM GİRİŞİ ---
 with m_s3:
     st.header("📉 Cari Firma / Kurum Gider Girişi")
     mg1, mg2, mg3, mg4, mg5 = st.columns(5)
-    with mg1: mas_cari = st.text_input("Ödeme Yapılan Firma / Kurum (Cari Adı)", placeholder="Örn: Aydem Elektrik", key="g_c")
-    with mg2: mas_kat = st.selectbox("Gider Kalemi / Kategorisi", ["Elektrik Faturası", "Su Faturası", "Asansör Bakımı", "Temizlik Görevlisi", "Tamirat / Tadilat", "Yönetim Masrafı", "Diğer"], key="g_k")
-    with mg3: mas_acik = st.text_input("Fatura / Harcama Açıklaması", placeholder="Örn: Ortak alan sayacı", key="g_a")
-    with mg4: mas_tutar = st.number_input("Fatura Tutarı (TL)", min_value=0.0, step=50.0, key="g_t")
-    with mg5: mas_tarih = st.date_input("Fatura Ödeme Tarihi", value=datetime.date.today(), format="DD.MM.YYYY", key="g_tar")
+    mas_cari = mg1.text_input("Ödeme Yapılan Firma / Kurum (Cari Adı)", placeholder="Örn: Aydem Elektrik", key="g_c")
+    mas_kat = mg2.selectbox("Gider Kalemi / Kategorisi", ["Elektrik Faturası", "Su Faturası", "Asansör Bakımı", "Temizlik Görevlisi", "Tamirat / Tadilat", "Yönetim Masrafı", "Diğer"], key="g_k")
+    mas_acik = mg3.text_input("Fatura / Harcama Açıklaması", placeholder="Örn: Ortak alan sayacı", key="g_a")
+    mas_tutar = mg4.number_input("Fatura Tutarı (TL)", min_value=0.0, step=50.0, key="g_t")
+    mas_tarih = mg5.date_input("Fatura Ödeme Tarihi", value=datetime.date.today(), format="DD.MM.YYYY", key="g_tar")
     
-    # Girinti hatası veren if koşulu tamamen düzleştirilerek kararlı hale getirildi
-    if st.button("🔴 Gider Kalemini Kasaya İşle", type="primary", key="g_btn"):
+    btn_masraf_tetik = st.button("🔴 Gider Kalemini Kasaya İşle", type="primary", key="g_btn")
+    if btn_masraf_tetik and mas_cari and mas_tutar > 0:
+        yeni_m = pd.DataFrame([{"Tarih": mas_tarih.strftime("%d.%m.%Y"), "Cari Adı / Kurum": mas_cari, "Kategori": mas_kat, "Açıklama": mas_acik, "Tutar (TL)": mas_tutar}])
